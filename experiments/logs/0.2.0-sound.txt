@@ -1,0 +1,44 @@
+# 0.2.0 sound parameters, 45 s flights, 26 sites, 1280x720, steepness 50
+preset          point-dist-env (freq-point, vol-dist, env-dist)
+frames sampled  900 (45 s)
+voices / frame  5.77
+distinct pitch  5.32 per frame
+pitch range     146.8 .. 440.0 Hz, 12 distinct
+level / voice   0.160
+pan             mean |pan| 0.60, left 46%, right 45%
+env rate        0.11 .. 30.00 Hz, median 0.43
+env regimes     3.9% continuous, 11% fast (>8 Hz), 56% slow (<0.5 Hz)
+tone            all cell tones
+
+preset          point-const-off (freq-point, vol-const, env-off)
+frames sampled  900 (45 s)
+voices / frame  6.43
+distinct pitch  6.38 per frame
+pitch range     130.8 .. 440.0 Hz, 10 distinct
+level / voice   0.165
+pan             mean |pan| 0.62, left 39%, right 54%
+env rate        1.00 .. 1.00 Hz, median 1.00
+env regimes     100.0% continuous, 0% fast (>8 Hz), 0% slow (<0.5 Hz)
+tone            all cell tones
+
+preset          dist-const-env (freq-dist, vol-const, env-dist)
+frames sampled  900 (45 s)
+voices / frame  5.77
+distinct pitch  5.69 per frame
+pitch range     10.1 .. 9335.0 Hz, 787 distinct
+level / voice   0.174
+pan             mean |pan| 0.59, left 45%, right 45%
+env rate        0.10 .. 30.00 Hz, median 0.32
+env regimes     2.5% continuous, 9% fast (>8 Hz), 59% slow (<0.5 Hz)
+tone            continuous distance pitches
+
+preset          dist-dist-off (freq-dist, vol-dist, env-off)
+frames sampled  900 (45 s)
+voices / frame  6.32
+distinct pitch  6.23 per frame
+pitch range     10.2 .. 7982.8 Hz, 879 distinct
+level / voice   0.152
+pan             mean |pan| 0.63, left 41%, right 49%
+env rate        1.00 .. 1.00 Hz, median 1.00
+env regimes     100.0% continuous, 0% fast (>8 Hz), 0% slow (<0.5 Hz)
+tone            continuous distance pitches

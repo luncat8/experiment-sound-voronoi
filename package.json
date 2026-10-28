@@ -1,0 +1,15 @@
+{
+	"name": "experiment-sound-voronoi",
+	"private": true,
+	"description": "Voronoi gravity field you can hear: nearest cell and its adjacent cells drive a spatial Web Audio synth.",
+	"scripts": {
+		"test": "node experiments/check-voronoi.js && node experiments/check-physics.js && node experiments/check-tones.js && node experiments/smoke.js",
+		"check:voronoi": "node experiments/check-voronoi.js",
+		"check:physics": "node experiments/check-physics.js",
+		"check:tones": "node experiments/check-tones.js",
+		"check:page": "node experiments/smoke.js",
+		"serve": "python3 -m http.server 8080 --bind 0.0.0.0",
+		"measure": "node experiments/measure-sound.js point-dist-env && node experiments/measure-sound.js dist-const-env",
+		"render": "node experiments/render-audio.js dist-const-env 15 sound-dist-const-env.wav"
+	}
+}

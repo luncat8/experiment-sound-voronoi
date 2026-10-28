@@ -3,11 +3,217 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title></title>
+<title>sound voronoi</title>
+<style>
+	:root {
+		--ink: #cfe9f2;
+		--dim: #688491;
+		--line: rgba(120, 200, 220, 0.16);
+		--panel: rgba(8, 12, 18, 0.72);
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; height: 100%; background: #07070d; }
+	body {
+		font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+		color: var(--ink);
+		overflow: hidden;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	#c {
+		display: block;
+		width: 100%;
+		height: 100%;
+		touch-action: none;
+		cursor: crosshair;
+	}
+	#hud {
+		position: fixed;
+		top: 12px;
+		left: 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		padding: 11px 13px 10px;
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		max-width: min(440px, calc(100vw - 24px));
+		backdrop-filter: blur(6px);
+	}
+	#hud .head {
+		display: flex;
+		gap: 8px;
+		align-items: baseline;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--dim);
+		font-size: 10px;
+	}
+	#status { color: #8ee0f0; }
+	.voices {
+		min-height: 1.45em;
+		letter-spacing: 0.03em;
+		color: #8ee0f0;
+		font-size: 11px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.group {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		padding-top: 5px;
+		border-top: 1px solid var(--line);
+	}
+	.radios {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+	.gname {
+		min-width: 58px;
+		color: var(--dim);
+		text-transform: uppercase;
+		font-size: 10px;
+		letter-spacing: 0.05em;
+	}
+	.radios label {
+		display: flex;
+		gap: 5px;
+		align-items: center;
+		cursor: pointer;
+	}
+	.radios input { accent-color: #4fd0e6; margin: 0; }
+	.steep {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		padding-left: 68px;
+		color: var(--dim);
+		font-size: 10px;
+		transition: opacity 0.15s ease;
+	}
+	.steep.disabled {
+		opacity: 0.3;
+		pointer-events: none;
+	}
+	input[type="range"] {
+		flex: 1;
+		accent-color: #4fd0e6;
+		margin: 0;
+		height: 14px;
+	}
+	.row {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		padding-top: 5px;
+		border-top: 1px solid var(--line);
+	}
+	.nbox {
+		display: flex;
+		gap: 5px;
+		align-items: center;
+		color: var(--dim);
+		font-size: 11px;
+	}
+	input[type="number"] {
+		width: 52px;
+		font: inherit;
+		color: var(--ink);
+		background: rgba(120, 200, 220, 0.08);
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		padding: 2px 5px;
+	}
+	button {
+		font: inherit;
+		color: var(--ink);
+		background: rgba(120, 200, 220, 0.1);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 2px 9px;
+		cursor: pointer;
+	}
+	button:hover { background: rgba(120, 200, 220, 0.22); }
+	.stat { color: var(--dim); margin-left: auto; font-size: 11px; }
+	.keys { color: var(--dim); font-size: 10px; line-height: 1.45; }
+	#gate {
+		position: fixed;
+		left: 50%;
+		bottom: 42px;
+		transform: translateX(-50%);
+		padding: 7px 16px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: var(--panel);
+		color: var(--dim);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-size: 10px;
+		pointer-events: none;
+		transition: opacity 0.4s ease;
+	}
+	#gate.hidden { opacity: 0; }
+</style>
 </head>
 <body>
-<div id="app">
-  <canvas id="c"></canvas>
+<canvas id="c"></canvas>
+<div id="hud">
+	<div class="head"><span>sound voronoi</span><span id="status"></span></div>
+	<div id="voices" class="voices"></div>
+	<div class="group">
+		<div class="radios">
+			<span class="gname">freq</span>
+			<label><input type="radio" name="freq" id="freq-point" checked><span>point id</span></label>
+			<label><input type="radio" name="freq" id="freq-dist"><span>distance (10k–10Hz)</span></label>
+		</div>
+		<label class="steep" id="row-freq-steep">
+			<span>steep</span>
+			<input type="range" id="freq-steep" min="0" max="100" value="50">
+		</label>
+	</div>
+	<div class="group">
+		<div class="radios">
+			<span class="gname">volume</span>
+			<label><input type="radio" name="vol" id="vol-dist" checked><span>distance</span></label>
+			<label><input type="radio" name="vol" id="vol-const"><span>const</span></label>
+		</div>
+		<label class="steep" id="row-vol-steep">
+			<span>steep</span>
+			<input type="range" id="vol-steep" min="0" max="100" value="50">
+		</label>
+	</div>
+	<div class="group">
+		<div class="radios">
+			<span class="gname">envelope</span>
+			<label><input type="radio" name="env" id="env-dist" checked><span>distance (&lt;20px cont, 30–0.1Hz)</span></label>
+			<label><input type="radio" name="env" id="env-off"><span>off</span></label>
+		</div>
+		<label class="steep" id="row-env-steep">
+			<span>steep</span>
+			<input type="range" id="env-steep" min="0" max="100" value="50">
+		</label>
+	</div>
+	<div class="row">
+		<label class="nbox">N <input type="number" id="n-points" min="3" max="300" value="26"></label>
+		<button id="random" type="button">random</button>
+		<button id="clear" type="button">clear</button>
+		<span id="count" class="stat">0 points</span>
+	</div>
+	<div class="keys">
+		click: add · drag: launch · drag point: move · right-click: remove<br>
+		R random · C clear · 1 freq · 2 vol · 3 env · M mute · P pause · space kick
+	</div>
 </div>
+<div id="gate">click / tap to start sound</div>
+<script src="src/voronoi.js"></script>
+<script src="src/physics.js"></script>
+<script src="src/tones.js"></script>
+<script src="src/sound.js"></script>
+<script src="src/app.js"></script>
 </body>
 </html>

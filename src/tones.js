@@ -53,8 +53,9 @@
 	}
 
 	// Mode "tone / distance": u = 0 at the point, 1 at the reference distance.
-	// Tremolo spans 30 Hz .. 0.1 Hz, where 30 Hz turns into an AM timbre.
-	function tremolo(u) {
+	// One plucked envelope per cycle: 30 Hz close (an AM timbre) down to 0.1 Hz
+	// far away (a single swell every ten seconds).
+	function pulseRate(u) {
 		const k = u < 0 ? 0 : u > 1 ? 1 : u;
 		return 0.1 * Math.pow(300, 1 - k);
 	}
@@ -72,7 +73,7 @@
 		return (((semitone % 12) + 12) % 12) * 30;
 	}
 
-	const api = { pick, hz, hue, tremolo, pitch };
+	const api = { pick, hz, hue, pulseRate, pitch };
 	root.GS = root.GS || {};
 	root.GS.Tones = api;
 	if (typeof module !== 'undefined' && module.exports) module.exports = api;

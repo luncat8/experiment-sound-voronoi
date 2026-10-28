@@ -141,17 +141,17 @@ console.log('range');
 
 console.log('distance mapping');
 {
-	check('tremolo is 30 Hz at the point', Math.abs(Tones.tremolo(0) - 30) < 1e-9, Tones.tremolo(0));
-	check('tremolo is 0.1 Hz at the reference distance', Math.abs(Tones.tremolo(1) - 0.1) < 1e-9, Tones.tremolo(1));
-	check('tremolo clamps outside 0..1', Tones.tremolo(-3) === 30 && Tones.tremolo(4) === 0.1);
+	check('pulse rate is 30 Hz at the point', Math.abs(Tones.pulseRate(0) - 30) < 1e-9, Tones.pulseRate(0));
+	check('pulse rate is 0.1 Hz at the reference distance', Math.abs(Tones.pulseRate(1) - 0.1) < 1e-9, Tones.pulseRate(1));
+	check('pulse rate clamps outside 0..1', Tones.pulseRate(-3) === 30 && Tones.pulseRate(4) === 0.1);
 	let falling = true;
 	let previous = Infinity;
 	for (let i = 0; i <= 20; i++) {
-		const rate = Tones.tremolo(i / 20);
+		const rate = Tones.pulseRate(i / 20);
 		if (rate >= previous) falling = false;
 		previous = rate;
 	}
-	check('tremolo falls monotonically with distance', falling);
+	check('pulse rate falls monotonically with distance', falling);
 
 	check('pitch starts at 55 Hz', Math.abs(Tones.pitch(0, 30) - 55) < 1e-9, Tones.pitch(0, 30));
 	check('pitch spans the requested interval', Math.abs(Tones.pitch(1, 30) - 55 * Math.pow(2, 30 / 12)) < 1e-6, Tones.pitch(1, 30));

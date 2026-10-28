@@ -17,6 +17,42 @@ Notes for agents working on this repo.
   LFO: even indices are carriers, odd are LFOs. Prefer distinguishing nodes by
   an explicit field if the graph ever grows.
 
+## stereo and articulation (learned the hard way)
+
+- **Pan by direction, not by distance.** `pan = dx / (width/2)` sounds like a
+  fault report: inside a cell the nearest point is only tens of pixels away, so
+  pan sits around ±0.1 and the stereo field is effectively dead. Normalise the
+  vector first (`dx/|d|`) and fade the result near the point so a point directly
+  under the listener does not snap to a side.
+- **Octave doubling is not polyphony.** Three voices at `f`, `2f`, `0.5f` fuse
+  into one perceived pitch *and* stop representing their source (a cell colour
+  mapped to `f` was heard at `2f`). If voices are supposed to be distinguishable,
+  give each its own pitch.
+- **A sine tremolo never articulates.** Smooth amplitude modulation reads as a
+  wobble at any rate. For "rare events far away, fast events up close" the
+  envelope has to be a shaped one-shot per cycle: sawtooth LFO → WaveShaper with
+  `attack·exp(-k·phase)` → the tremolo gain. Swapping the shaper curve and the LFO
+  type on mode change is cheaper than rebuilding nodes.
+- When switching between a modulation scheme and a fixed gain, zero the
+  modulation depth first: base + leftover depth briefly doubles the gain (audible
+  click/blip).
+- **Normalise distances by the local scale.** `u = d / diagonal` compresses
+  everything: the nearest site is rarely a third of the diagonal away, so a
+  0.1..30 Hz mapping only ever produced 2..15 Hz. `u = d / cellRadius` puts
+  `u = 0` on the point and `u = 1` on the cell border and makes the whole range
+  reachable inside one cell.
+
+## auditioning without speakers
+
+- Keep the parameter stream observable (`page.voice(i)` in the stub) and print
+  statistics over a flight: distinct pitches per frame, mean |pan| with a
+  left/right split, min/median/max rate, and the share of samples in the fast and
+  rare ends. Those numbers catch every failure above.
+- `experiments/render-audio.js` renders the same parameter stream through a small
+  software synth (triangle → one-pole lowpass → envelope → equal-power pan) into a
+  WAV. It verifies the signal itself (peak, clipping, RMS, envelope attacks per
+  second, silent windows) and can be played back by a human.
+
 ## voronoi by half-plane clipping
 
 - Clip the view rect per site with `f(p) = |p-si|² - |p-sj|²`, which is affine:

@@ -8,8 +8,14 @@
 	const VOICES = 3;
 	const TAU = Math.PI * 2;
 	const MIN_GAP = 34;
+	const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+	// Semitone 0 is C3, i.e. MIDI 48.
+	const MIDI_BASE = 48;
+	// The readout builds strings, so it only refreshes every eighth frame.
+	const READOUT_EVERY = 7;
 	const LAUNCH_GAIN = 2.4;
 	const TRAIL_RAMP = 32;
+	const PAN_REACH = 70;
 
 	const voronoi = new Voronoi();
 	const physics = new Physics();
@@ -35,9 +41,8 @@
 		aiming: false,
 		sounding: new Int32Array(VOICES),
 		soundingCount: 0,
-		soundRef: 420,
-		toneRef: 240,
 		lastTime: 0,
+		readoutTick: 0,
 	};
 
 	const drag = { active: false, kind: 0, index: -1, x0: 0, y0: 0, x: 0, y: 0, moved: false };
@@ -49,7 +54,7 @@
 		freq: new Float64Array(VOICES),
 		amp: new Float64Array(VOICES),
 		pan: new Float64Array(VOICES),
-		lfo: new Float64Array(VOICES),
+		rate: new Float64Array(VOICES),
 	};
 
 	const fillColor = new Array(MAX_POINTS);
@@ -59,6 +64,7 @@
 	const glowColor = new Array(MAX_POINTS);
 	// 0 idle, 1 adjacent sounding cell, 2 cell under the probe.
 	const role = new Int8Array(MAX_POINTS);
+	const noteName = new Array(MAX_POINTS);
 	const trailColor = new Array(TRAIL_RAMP);
 
 	let canvas = null;
@@ -72,6 +78,8 @@
 	}
 
 	function paintSite(i) {
+		const midi = MIDI_BASE + sites.semitone[i];
+		noteName[i] = NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
 		const hue = Tones.hue(sites.semitone[i]).toFixed(0);
 		fillColor[i] = 'hsla(' + hue + ', 76%, 54%, 0.26)';
 		hotColor[i] = 'hsla(' + hue + ', 88%, 58%, 0.42)';
@@ -202,28 +210,41 @@
 		state.sounding[state.soundingCount++] = index;
 	}
 
+	// Panning follows the direction to a point, not the distance: deep inside a
+	// cell the point can be 40 px away and still be the thing you hear on the
+	// left. Only a point almost under the probe fades back to the centre.
 	function panOf(index) {
-		return clamp((sites.x[index] - physics.x) * (0.9 / (state.viewW * 0.5)), -1, 1);
+		const dx = sites.x[index] - physics.x;
+		const dy = sites.y[index] - physics.y;
+		const dist = Math.sqrt(dx * dx + dy * dy);
+		if (dist < 1e-3) return 0;
+		const fade = dist < PAN_REACH ? dist / PAN_REACH : 1;
+		return clamp(0.92 * (dx / dist) * fade, -1, 1);
 	}
 
-	// Adjacent cells sit farther away than the cell under the probe; this keeps
-	// them audible as colour without competing for the foreground.
+	// Adjacent cells sit farther away than the cell under the probe, but they
+	// stay clearly audible: a chord, not a shadow.
 	function relative(front, other) {
-		return clamp((front + 44) / (other + 44), 0, 1);
+		return clamp((front + 44) / (other + 44), 0.45, 1);
 	}
 
-	function setVoice(v, cell, hz, amp, lfoHz) {
+	function setVoice(v, cell, hz, amp, rateHz) {
 		frame.freq[v] = hz;
 		frame.amp[v] = amp;
 		frame.pan[v] = panOf(cell);
-		frame.lfo[v] = lfoHz;
+		frame.rate[v] = rateHz;
 	}
 
-	// The nearest point is rarely farther than a third of the diagonal, so the
-	// tremolo and pitch ranges are spread over that distance, not the full canvas.
+	// Distances are normalised by the cell's own radius, so u = 0 on the point and
+	// u = 1 at the cell border: the whole expressive range lives inside one cell
+	// instead of in the empty space between cells.
+	function cellRef(index) {
+		return clamp(Math.sqrt(voronoi.reach[index]), 70, 420);
+	}
+
 	function toneVoice(v, cell, dist, amp) {
-		const u = dist / state.toneRef;
-		setVoice(v, cell, Tones.pitch(u, 14 + 30 * state.sensitivity), amp, Tones.tremolo(u));
+		const u = clamp(dist / cellRef(cell), 0, 1);
+		setVoice(v, cell, Tones.pitch(u, 12 + 26 * state.sensitivity), amp, Tones.pulseRate(u));
 	}
 
 	function buildFrame() {
@@ -271,25 +292,36 @@
 		if (n2 >= 0) markSounding(n2, 1);
 
 		if (state.mode === 0) {
-			// Pitch belongs to the cell, volume follows the distance to its point.
-			f.depth = 0.1;
-			const falloff = 0.8 + 2.4 * state.sensitivity;
-			const u = d0 / (0.35 * state.soundRef);
-			const amp = 0.5 / (1 + u * u * falloff);
+			// Pitch belongs to the cell and volume follows the distance to its
+			// point. Each voice keeps its own cell tone: three distinct pitches,
+			// so the chord is polyphonic and a cell's colour is its pitch.
+			f.depth = 0.06;
+			const u = d0 / cellRef(near);
+			const amp = 0.5 / (1 + u * u * (1 + 4 * state.sensitivity));
 			setVoice(0, near, Tones.hz(sites.semitone[near]), amp, 4.5);
-			// The neighbours double as octave partners, so the chord stays an
-			// open fifth-ish stack rather than a cluster.
-			if (n1 >= 0) setVoice(1, n1, Tones.hz(sites.semitone[n1]) * 2, amp * 0.8 * relative(d0, e1), 3.7);
-			if (n2 >= 0) setVoice(2, n2, Tones.hz(sites.semitone[n2]) * 0.5, amp * 0.6 * relative(d0, e2), 5.3);
+			if (n1 >= 0) setVoice(1, n1, Tones.hz(sites.semitone[n1]), amp * 0.85 * relative(d0, e1), 3.7);
+			if (n2 >= 0) setVoice(2, n2, Tones.hz(sites.semitone[n2]), amp * 0.7 * relative(d0, e2), 5.3);
 			return;
 		}
 
-		// Pitch and tremolo rate both follow the distance, per cell: 0.1 Hz far
-		// away, 30 Hz close, where the tremolo turns into an AM timbre.
-		f.depth = 0.95;
-		toneVoice(0, near, d0, 0.5);
-		if (n1 >= 0) toneVoice(1, n1, e1, 0.28 * relative(d0, e1));
-		if (n2 >= 0) toneVoice(2, n2, e2, 0.2 * relative(d0, e2));
+		// Pitch and pulse rate follow the distance to each cell's point: 30 Hz
+		// pulses close (an AM timbre), 0.1 Hz far away (a rare swell).
+		f.depth = 1;
+		toneVoice(0, near, d0, 0.85);
+		if (n1 >= 0) toneVoice(1, n1, e1, 0.5 * relative(d0, e1));
+		if (n2 >= 0) toneVoice(2, n2, e2, 0.35 * relative(d0, e2));
+	}
+
+	/* ---- readout ---- */
+
+	function updateVoices() {
+		let text = '';
+		for (let i = 0; i < frame.count; i++) {
+			const separator = i === 0 ? '' : ' · ';
+			if (state.mode === 0) text += separator + noteName[state.sounding[i]];
+			else text += separator + Math.round(frame.freq[i]) + ' Hz @ ' + frame.rate[i].toFixed(1) + '/s';
+		}
+		ui.voices.textContent = text;
 	}
 
 	/* ---- render ---- */
@@ -386,6 +418,7 @@
 		}
 		buildFrame();
 		sound.apply(frame);
+		if ((state.readoutTick++ & READOUT_EVERY) === 0) updateVoices();
 		render();
 		requestAnimationFrame(loop);
 	}
@@ -527,8 +560,6 @@
 		canvas.height = Math.round(h * dpr);
 		canvas.style.width = w + 'px';
 		canvas.style.height = h + 'px';
-		state.soundRef = Math.max(160, 0.42 * Math.sqrt(w * w + h * h));
-		state.toneRef = 0.55 * state.soundRef;
 		for (let i = 0; i < sites.count; i++) {
 			sites.x[i] = clamp(sites.x[i], 8, w - 8);
 			sites.y[i] = clamp(sites.y[i], 8, h - 8);
@@ -571,6 +602,7 @@
 			sens: $('sens'),
 			sensLabel: $('sens-label'),
 			count: $('count'),
+			voices: $('voices'),
 			status: $('status'),
 			random: $('random'),
 			clear: $('clear'),

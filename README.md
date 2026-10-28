@@ -23,17 +23,21 @@ Open `index.html` — no build, no server, no network.
 
 ## sound
 
-Two modes, both driven by the nearest cell and its two nearest neighbours:
+Three voices: the cell under the probe and its two nearest neighbours, each voice
+playing **its own cell tone** (no octave folding), so the chord is polyphonic and
+a cell's colour is exactly the pitch you hear. Distances are normalised by the
+cell's own radius: 0 on a point, 1 at the cell border.
 
-- **pitch / cell** — every point owns a pentatonic tone, so the pitch *is* the
-  cell; volume falls with the distance to the cell's point. Cells are coloured by
-  their tone, and the three sounding cells are outlined.
-- **tone / distance** — pitch follows the distance to each point (55 Hz up to
-  about 2.5 octaves) and the tremolo rate spans 30 Hz near … 0.1 Hz far, which
-  turns the tremolo into an AM timbre up close.
+- **pitch / cell** — sustained. Pitch is the cell tone, volume falls with the
+  distance to the cell's point (the slider sets how hard), a slight shimmer keeps
+  it alive.
+- **tone / distance** — pulsed. Pitch and articulation both follow the distance:
+  pitch `55 Hz · 2^(u·span/12)`, and one plucked envelope per cycle at
+  30 Hz close … 0.1 Hz far, i.e. buzz near a point and a rare swell far from one.
+  The slider sets the pitch span.
 
-The slider weights the distance → volume mapping in the first mode and the
-distance → pitch span in the second. Left/right direction to a cell becomes the stereo pan.
+Panning follows the *direction* to a point, so a cell on the left is heard on the
+left even when the probe is deep inside it.
 
 ## tuning of the field
 
@@ -53,7 +57,7 @@ C3..B4. `npm run check:tones` prints the current numbers.
     src/tones.js                  pentatonic placement, distance mappings
     src/sound.js                  Web Audio voices
     src/app.js                    sites, interaction, audio frame, rendering
-    experiments/                  node checks (not loaded by the page)
+    experiments/                  node checks and measurements (not loaded by the page)
 
 ## checks
 
@@ -62,3 +66,5 @@ C3..B4. `npm run check:tones` prints the current numbers.
     npm run check:physics         bounds, stability, stall recovery
     npm run check:tones           interval statistics of generated fields
     npm run check:page            drives the real page against a stub DOM/audio
+    npm run measure               pitch/chord/pan/pulse-rate over a flight
+    npm run render                offline synth render to sound-distance.wav

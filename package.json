@@ -8,6 +8,8 @@
 		"check:physics": "node experiments/check-physics.js",
 		"check:tones": "node experiments/check-tones.js",
 		"check:page": "node experiments/smoke.js",
-		"serve": "python3 -m http.server 8080"
+		"serve": "python3 -m http.server 8080",
+		"measure": "node experiments/measure-sound.js cell && node experiments/measure-sound.js distance",
+		"render": "node experiments/render-audio.js distance 20 sound-distance.wav"
 	}
 }

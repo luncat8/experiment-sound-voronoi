@@ -71,6 +71,12 @@
 	}
 	button:hover { background: rgba(120, 200, 220, 0.2); }
 	.stat { color: var(--dim); margin-left: auto; }
+	.voices {
+		min-height: 1.6em;
+		letter-spacing: 0.04em;
+		color: #8ee0f0;
+		font-size: 11px;
+	}
 	.keys { color: var(--dim); font-size: 10px; line-height: 1.5; }
 	#gate {
 		position: fixed;
@@ -95,6 +101,7 @@
 <canvas id="c"></canvas>
 <div id="hud">
 	<div class="head"><span>sound voronoi</span><span id="status"></span></div>
+	<div id="voices" class="voices"></div>
 	<div class="modes">
 		<label><input type="radio" name="sound" id="mode-pad" checked><span>pitch / cell</span></label>
 		<label><input type="radio" name="sound" id="mode-dist"><span>tone / distance</span></label>

@@ -1,0 +1,24 @@
+# 0.1.1 sound parameters (final), 45 s flight, 26 sites, 1280x720, slider 55
+mode            cell
+frames sampled  900 (45 s)
+voices / frame  3.00
+distinct pitch  2.98 per frame, 2.4% frames with a doubled pitch
+pitch range     130.8 .. 392.0 Hz, 11 distinct
+level per voice 0.239
+pan             mean |pan| 0.55, left 43%, right 45%
+pulse rate      3.70 .. 5.30 Hz, median 4.50
+articulation    0% fast (>8 Hz), 0% rare (<0.5 Hz)
+strong pans     1627 samples beyond +-0.5
+tone            all cell tones
+
+mode            distance
+frames sampled  900 (45 s)
+voices / frame  3.00
+distinct pitch  2.99 per frame, 1.2% frames with a doubled pitch
+pitch range     55.1 .. 251.3 Hz, 196 distinct
+level per voice 0.461
+pan             mean |pan| 0.56, left 35%, right 51%
+pulse rate      0.10 .. 29.71 Hz, median 2.57
+articulation    24% fast (>8 Hz), 36% rare (<0.5 Hz)
+strong pans     1523 samples beyond +-0.5
+tone            off-grid pitches present

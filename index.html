@@ -3,11 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title></title>
+<title>Sound Voronoi</title>
+<style>
+	body{margin:0;font-family:sans-serif;background:#111;color:#eee}
+	#bar{padding:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+	canvas{display:block;margin:0 auto;border:1px solid #444;cursor:crosshair}
+	label{font-size:13px}
+	input[type=number]{width:60px}
+</style>
 </head>
 <body>
-<div id="app">
-  <canvas id="c"></canvas>
+<div id="bar">
+	<label>N <input id="n" type="number" min="3" max="300" value="24"></label>
+	<button id="rebuild">Rebuild</button>
+	<label><input type="radio" name="mode" value="1" checked> Mode 1: continuous (vol by dist, freq by point)</label>
+	<label><input type="radio" name="mode" value="2"> Mode 2: tone freq by dist, AM by dist</label>
+	<label>slider <input id="slider" type="range" min="0" max="100" value="50"></label>
+	<span id="info"></span>
 </div>
+<canvas id="c"></canvas>
+<script src="app.js"></script>
 </body>
 </html>

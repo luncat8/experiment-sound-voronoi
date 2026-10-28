@@ -1,0 +1,13 @@
+{
+	"name": "experiment-sound-voronoi",
+	"private": true,
+	"description": "Voronoi gravity field you can hear: a probe flies through mass points and the cell under it is played.",
+	"scripts": {
+		"test": "node experiments/check-voronoi.js && node experiments/check-physics.js && node experiments/check-tones.js && node experiments/smoke.js",
+		"check:voronoi": "node experiments/check-voronoi.js",
+		"check:physics": "node experiments/check-physics.js",
+		"check:tones": "node experiments/check-tones.js",
+		"check:page": "node experiments/smoke.js",
+		"serve": "python3 -m http.server 8080"
+	}
+}

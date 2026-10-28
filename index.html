@@ -3,11 +3,121 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title></title>
+<title>sound voronoi</title>
+<style>
+	:root {
+		--ink: #cfe9f2;
+		--dim: #5f7a86;
+		--line: rgba(120, 200, 220, 0.16);
+		--panel: rgba(8, 12, 18, 0.62);
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; height: 100%; background: #07070d; }
+	body {
+		font: 12px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+		color: var(--ink);
+		overflow: hidden;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	#c {
+		display: block;
+		width: 100%;
+		height: 100%;
+		touch-action: none;
+		cursor: crosshair;
+	}
+	#hud {
+		position: fixed;
+		top: 14px;
+		left: 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 9px;
+		padding: 12px 14px 11px;
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		max-width: min(430px, calc(100vw - 28px));
+	}
+	#hud .head {
+		display: flex;
+		gap: 8px;
+		align-items: baseline;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--dim);
+		font-size: 10px;
+	}
+	#status { color: #8ee0f0; }
+	.modes { display: flex; gap: 14px; flex-wrap: wrap; }
+	.modes label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+	.modes input { accent-color: #4fd0e6; margin: 0; }
+	input[type="range"] {
+		width: 100%;
+		accent-color: #4fd0e6;
+		margin: 2px 0 0;
+	}
+	.slider { display: flex; flex-direction: column; gap: 2px; color: var(--dim); }
+	.row { display: flex; gap: 8px; align-items: center; }
+	button {
+		font: inherit;
+		color: var(--ink);
+		background: rgba(120, 200, 220, 0.1);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 3px 10px;
+		cursor: pointer;
+	}
+	button:hover { background: rgba(120, 200, 220, 0.2); }
+	.stat { color: var(--dim); margin-left: auto; }
+	.keys { color: var(--dim); font-size: 10px; line-height: 1.5; }
+	#gate {
+		position: fixed;
+		left: 50%;
+		bottom: 46px;
+		transform: translateX(-50%);
+		padding: 7px 16px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: var(--panel);
+		color: var(--dim);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-size: 10px;
+		pointer-events: none;
+		transition: opacity 0.4s ease;
+	}
+	#gate.hidden { opacity: 0; }
+</style>
 </head>
 <body>
-<div id="app">
-  <canvas id="c"></canvas>
+<canvas id="c"></canvas>
+<div id="hud">
+	<div class="head"><span>sound voronoi</span><span id="status"></span></div>
+	<div class="modes">
+		<label><input type="radio" name="sound" id="mode-pad" checked><span>pitch / cell</span></label>
+		<label><input type="radio" name="sound" id="mode-dist"><span>tone / distance</span></label>
+	</div>
+	<label class="slider">
+		<span id="sens-label">distance → volume</span>
+		<input type="range" id="sens" min="0" max="100" value="55">
+	</label>
+	<div class="row">
+		<button id="random" type="button">random</button>
+		<button id="clear" type="button">clear</button>
+		<span id="count" class="stat">0 points</span>
+	</div>
+	<div class="keys">
+		click: add · drag: launch · drag a point: move · right-click: remove<br>
+		R random · C clear · 1/2 mode · M mute · P pause · space nudges
+	</div>
 </div>
+<div id="gate">click / tap to start sound</div>
+<script src="src/voronoi.js"></script>
+<script src="src/physics.js"></script>
+<script src="src/tones.js"></script>
+<script src="src/sound.js"></script>
+<script src="src/app.js"></script>
 </body>
 </html>

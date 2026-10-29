@@ -36,6 +36,12 @@ async function copy(page) {
 	return page.clipboard.text;
 }
 
+async function copyParams(page) {
+	const result = page.element('copy-params').dispatch('click');
+	await Promise.all(result.results);
+	return page.clipboard.text;
+}
+
 function capture(page, time) {
 	const ctx = page.canvas().ctx;
 	ctx.operations.length = 0;
@@ -212,7 +218,7 @@ async function checkSharing() {
 	assert.equal(page.element('env-steep').value, '93');
 	assert.equal(page.element('status').textContent, 'paused');
 	assert.deepEqual(Settings.fromUrl(await copy(page)), original, 'full scene round trips');
-	assert.equal(page.element('copy-status').textContent, 'link copied');
+	assert.equal(page.element('copy-status').textContent, 'map link copied');
 	page.canvas().dispatch('pointerdown', { clientX: 450, clientY: 360 });
 	page.canvas().dispatch('pointerup', { clientX: 450, clientY: 360 });
 	assert.equal(page.audio.gains[0].gain.target, 0, 'restored mute applies when audio starts');
@@ -276,10 +282,65 @@ async function checkSharing() {
 	console.log('  ok   clipboard fallback, file URLs, and malformed scene validation');
 }
 
+async function checkParams() {
+	const original = scene({
+		modes: [1, 1, 0], steep: [37, 64, 93], flags: [0, 1], n: 8,
+		probe: [700, 450, -50, 40], sites: [[450, 360, 1.4, 2], [1000, 600, 2.75, 19]],
+	});
+	const page = createPage({ url: Settings.toUrl(original, BASE) });
+	const link = await copyParams(page);
+	assert.equal(page.element('copy-status').textContent, 'params link copied');
+	assert.match(link, /#freq=dist&freq-steep=37&vol=const&vol-steep=64&env=off&env-steep=93&n=8$/);
+	assert.equal(link.includes('scene='), false, 'params links carry no base64 scene');
+	assert.equal(Settings.fromUrl(link), null);
+	const params = Settings.paramsFromUrl(link);
+	assert.deepEqual(params, { freq: 1, freqSteep: 37, vol: 1, volSteep: 64, env: 0, envSteep: 93, n: 8 });
+	assert.equal(Settings.formatParams(params), link.split('#')[1], 'params round trip without percent escapes');
+	assert.deepEqual(Settings.paramsFromScene(original), params);
+
+	const restored = createPage({ url: link });
+	assert.equal(restored.audio.contexts, 0, 'params link does not start audio');
+	assert.equal(restored.element('freq-dist').checked, true);
+	assert.equal(restored.element('vol-const').checked, true);
+	assert.equal(restored.element('env-off').checked, true);
+	assert.equal(restored.element('freq-steep').value, '37');
+	assert.equal(restored.element('vol-steep').value, '64');
+	assert.equal(restored.element('env-steep').value, '93');
+	assert.equal(restored.element('n-points').value, '8');
+	assert.equal(restored.pointCount(), 8, 'params link fills the empty field with N points');
+	assert.equal(restored.element('status').textContent, '', 'params links leave pause and mute alone');
+	console.log('  ok   params link copies readable GUI settings and restores them without a scene');
+
+	const field = createPage({ url: Settings.toUrl(original, BASE) });
+	const fieldScene = Settings.fromUrl(await copy(field));
+	field.sandbox.location.href = Settings.toParamsUrl({ freq: 0, freqSteep: 12 }, BASE);
+	field.dispatchWindow('hashchange');
+	assert.equal(field.pointCount(), 2, 'a params hash leaves the field alone');
+	assert.equal(field.element('freq-point').checked, true);
+	assert.equal(field.element('freq-steep').value, '12');
+	assert.equal(field.element('vol-steep').value, '64', 'omitted keys keep their current values');
+	assert.equal(field.element('status').textContent, 'paused', 'transport state survives a params hash');
+	assert.deepEqual(Settings.fromUrl(await copy(field)).sites, fieldScene.sites, 'map copy still carries the field');
+	assert.equal(Settings.parseParams('freq=point&bogus=1'), null);
+	assert.equal(Settings.parseParams('freq=midi'), null);
+	assert.equal(Settings.parseParams('vol-steep=101'), null);
+	assert.equal(Settings.parseParams('n=0'), null);
+	assert.equal(Settings.parseParams('run=1'), null, 'transport keys are not part of the params format');
+	assert.equal(Settings.parseParams(''), null);
+	assert.equal(Settings.paramsFromUrl(BASE), null);
+
+	const fallback = createPage({ url: Settings.toUrl(original, BASE), clipboard: 'reject' });
+	await copyParams(fallback);
+	assert.equal(fallback.element('share-fallback').hidden, false);
+	assert.deepEqual(Settings.paramsFromUrl(fallback.element('share-url').value), params);
+	console.log('  ok   params apply on top of the live field and fall back to a selectable link');
+}
+
 (async () => {
 	await checkHalos();
 	await checkWheel();
 	await checkSharing();
+	await checkParams();
 	console.log('\nall feature checks passed');
 })().catch(error => {
 	console.error(error.stack);

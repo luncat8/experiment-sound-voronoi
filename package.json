@@ -10,6 +10,7 @@
 		"check:tones": "node experiments/check-tones.js",
 		"check:page": "node experiments/smoke.js",
 		"serve": "python3 -m http.server 8080 --bind 0.0.0.0",
+		"decode": "node experiments/decode-link.js",
 		"measure": "node experiments/measure-sound.js point-dist-env && node experiments/measure-sound.js dist-const-env",
 		"render": "node experiments/render-audio.js dist-const-env 15 sound-dist-const-env.wav"
 	}

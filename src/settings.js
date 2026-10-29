@@ -5,6 +5,19 @@
 	const MAX_POINTS = 400;
 	const MAX_TOKEN_LENGTH = 120000;
 
+	// One ordered table drives the readable hash, so link order stays stable.
+	// labels are listed in scene-mode order: 0, 1. Only visible HUD controls belong
+	// here; transport state and the field itself stay in the full scene link.
+	const PARAMS = [
+		{ key: 'freq', field: 'freq', labels: ['point', 'dist'] },
+		{ key: 'freq-steep', field: 'freqSteep', min: 0, max: 100 },
+		{ key: 'vol', field: 'vol', labels: ['dist', 'const'] },
+		{ key: 'vol-steep', field: 'volSteep', min: 0, max: 100 },
+		{ key: 'env', field: 'env', labels: ['off', 'dist'] },
+		{ key: 'env-steep', field: 'envSteep', min: 0, max: 100 },
+		{ key: 'n', field: 'n', min: 1, max: MAX_POINTS },
+	];
+
 	function inRange(value, min, max) {
 		return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 	}
@@ -62,7 +75,71 @@
 		}
 	}
 
-	const api = { VERSION, encode, decode, toUrl, fromUrl };
+	/* ---- readable gui parameters ---- */
+
+	function paramsFromScene(scene) {
+		return {
+			freq: scene.modes[0], freqSteep: scene.steep[0],
+			vol: scene.modes[1], volSteep: scene.steep[1],
+			env: scene.modes[2], envSteep: scene.steep[2],
+			n: scene.n,
+		};
+	}
+
+	function formatParams(params) {
+		const pairs = [];
+		for (const spec of PARAMS) {
+			const value = params[spec.field];
+			if (value === undefined) continue;
+			pairs.push([spec.key, spec.labels ? spec.labels[value] : String(value)]);
+		}
+		return new root.URLSearchParams(pairs).toString();
+	}
+
+	// Any non-empty subset of known keys is a valid preset; unknown keys are rejected.
+	function parseParams(text) {
+		if (typeof text !== 'string' || !text || text.length > MAX_TOKEN_LENGTH) return null;
+		const query = new root.URLSearchParams(text);
+		const known = new Set(PARAMS.map(spec => spec.key));
+		for (const key of query.keys()) if (!known.has(key)) return null;
+		const params = {};
+		let seen = 0;
+		for (const spec of PARAMS) {
+			const raw = query.get(spec.key);
+			if (raw === null) continue;
+			if (spec.labels) {
+				const mode = spec.labels.indexOf(raw);
+				if (mode < 0) return null;
+				params[spec.field] = mode;
+			} else {
+				if (!/^\d+$/.test(raw)) return null;
+				const value = Number(raw);
+				if (value < spec.min || value > spec.max) return null;
+				params[spec.field] = value;
+			}
+			seen++;
+		}
+		return seen > 0 ? params : null;
+	}
+
+	function toParamsUrl(params, href) {
+		const url = new root.URL(href);
+		url.hash = formatParams(params);
+		return url.href;
+	}
+
+	function paramsFromUrl(href) {
+		try {
+			return parseParams(new root.URL(href).hash.slice(1));
+		} catch (error) {
+			return null;
+		}
+	}
+
+	const api = {
+		VERSION, encode, decode, toUrl, fromUrl,
+		paramsFromScene, formatParams, parseParams, toParamsUrl, paramsFromUrl,
+	};
 	root.GS = root.GS || {};
 	root.GS.Settings = api;
 	if (typeof module !== 'undefined' && module.exports) module.exports = api;

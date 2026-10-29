@@ -535,7 +535,21 @@
 		return Math.round(value * scale) / scale;
 	}
 
+	function pointTarget() {
+		return clamp(parseInt(ui.nPoints.value, 10) || defaultPointCount(), 1, MAX_POINTS);
+	}
+
+	function snapshotParams() {
+		return {
+			freq: state.freqMode, freqSteep: Math.round(state.freqSteep * 100),
+			vol: state.volMode, volSteep: Math.round(state.volSteep * 100),
+			env: state.envMode, envSteep: Math.round(state.envSteep * 100),
+			n: pointTarget(),
+		};
+	}
+
 	function snapshot() {
+		const params = snapshotParams();
 		const points = [];
 		for (let i = 0; i < sites.count; i++) {
 			points.push([rounded(sites.x[i], 100), rounded(sites.y[i], 100), rounded(sites.mass[i], 10000), sites.semitone[i]]);
@@ -543,13 +557,33 @@
 		return {
 			v: Settings.VERSION,
 			size: [state.viewW, state.viewH],
-			modes: [state.freqMode, state.volMode, state.envMode],
-			steep: [Math.round(state.freqSteep * 100), Math.round(state.volSteep * 100), Math.round(state.envSteep * 100)],
-			n: clamp(parseInt(ui.nPoints.value, 10) || defaultPointCount(), 1, MAX_POINTS),
+			modes: [params.freq, params.vol, params.env],
+			steep: [params.freqSteep, params.volSteep, params.envSteep],
+			n: params.n,
 			flags: [state.running ? 1 : 0, state.muted ? 1 : 0],
 			probe: [rounded(physics.x, 100), rounded(physics.y, 100), rounded(physics.vx, 100), rounded(physics.vy, 100)],
 			sites: points,
 		};
+	}
+
+	// Only the visible controls change here; the field, probe, and viewport stay put.
+	function applyParams(params) {
+		if (params.freq !== undefined) setFreqMode(params.freq);
+		if (params.vol !== undefined) setVolMode(params.vol);
+		if (params.env !== undefined) setEnvMode(params.env);
+		if (params.freqSteep !== undefined) {
+			state.freqSteep = params.freqSteep / 100;
+			ui.freqSteep.value = String(params.freqSteep);
+		}
+		if (params.volSteep !== undefined) {
+			state.volSteep = params.volSteep / 100;
+			ui.volSteep.value = String(params.volSteep);
+		}
+		if (params.envSteep !== undefined) {
+			state.envSteep = params.envSteep / 100;
+			ui.envSteep.value = String(params.envSteep);
+		}
+		if (params.n !== undefined) ui.nPoints.value = String(params.n);
 	}
 
 	function restoreScene(scene) {
@@ -572,50 +606,52 @@
 		paintAllSites();
 		physics.place(scene.probe[0] * sx, scene.probe[1] * sy);
 		physics.launch(scene.probe[2] * sx, scene.probe[3] * sy);
-		setFreqMode(scene.modes[0]);
-		setVolMode(scene.modes[1]);
-		setEnvMode(scene.modes[2]);
-		state.freqSteep = scene.steep[0] / 100;
-		state.volSteep = scene.steep[1] / 100;
-		state.envSteep = scene.steep[2] / 100;
-		ui.freqSteep.value = String(scene.steep[0]);
-		ui.volSteep.value = String(scene.steep[1]);
-		ui.envSteep.value = String(scene.steep[2]);
-		ui.nPoints.value = String(scene.n);
-		updateCount();
+		applyParams(Settings.paramsFromScene(scene));
 		state.running = scene.flags[0] === 1;
 		state.muted = scene.flags[1] === 1;
 		sound.setMuted(state.muted);
 		if (state.running) sound.resume();
 		else sound.suspend();
+		updateCount();
 		updateStatus();
 	}
 
 	function loadUrl() {
 		const scene = Settings.fromUrl(root.location.href);
-		if (!scene) return false;
-		restoreScene(scene);
-		return true;
+		if (scene) {
+			restoreScene(scene);
+			return true;
+		}
+		const params = Settings.paramsFromUrl(root.location.href);
+		if (params) applyParams(params);
+		return false;
 	}
 
-	async function copyUrl() {
-		const url = Settings.toUrl(snapshot(), root.location.href);
+	async function copyText(text, done) {
 		ui.copyStatus.textContent = '';
 		if (root.navigator && root.navigator.clipboard && root.navigator.clipboard.writeText) {
 			try {
-				await root.navigator.clipboard.writeText(url);
+				await root.navigator.clipboard.writeText(text);
 				ui.shareFallback.hidden = true;
-				ui.copyStatus.textContent = 'link copied';
+				ui.copyStatus.textContent = done;
 				return;
 			} catch (error) {
 				// A selectable link also works when clipboard permission is denied.
 			}
 		}
 		ui.shareFallback.hidden = false;
-		ui.shareUrl.value = url;
+		ui.shareUrl.value = text;
 		ui.shareUrl.focus();
 		ui.shareUrl.select();
 		ui.copyStatus.textContent = 'select and copy the link below';
+	}
+
+	function copyMap() {
+		return copyText(Settings.toUrl(snapshot(), root.location.href), 'map link copied');
+	}
+
+	function copyParams() {
+		return copyText(Settings.toParamsUrl(snapshotParams(), root.location.href), 'params link copied');
 	}
 
 	/* ---- input ---- */
@@ -791,7 +827,8 @@
 			ui.clear.blur();
 			clearPoints();
 		});
-		ui.copyUrl.addEventListener('click', copyUrl);
+		ui.copyMap.addEventListener('click', copyMap);
+		ui.copyParams.addEventListener('click', copyParams);
 	}
 
 	function init() {
@@ -817,7 +854,8 @@
 			mass: $('mass-readout'),
 			random: $('random'),
 			clear: $('clear'),
-			copyUrl: $('copy-url'),
+			copyMap: $('copy-url'),
+			copyParams: $('copy-params'),
 			copyStatus: $('copy-status'),
 			shareFallback: $('share-fallback'),
 			shareUrl: $('share-url'),

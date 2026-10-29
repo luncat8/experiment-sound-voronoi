@@ -53,7 +53,7 @@ function makeElement(id) {
 		RADIOS.has(id) ? 'radio' : RANGES.has(id) ? 'range' : '';
 	const element = {
 		id,
-		tagName: type ? 'INPUT' : id === 'copy-url' ? 'BUTTON' : 'DIV',
+		tagName: type ? 'INPUT' : id === 'copy-url' || id === 'copy-params' ? 'BUTTON' : 'DIV',
 		type,
 		style: {},
 		textContent: '',

@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const FILES = ['src/voronoi.js', 'src/physics.js', 'src/tones.js', 'src/sound.js', 'src/app.js'];
+const FILES = ['src/voronoi.js', 'src/physics.js', 'src/tones.js', 'src/sound.js', 'src/settings.js', 'src/app.js'];
 
 const DEFAULTS = {
 	'freq-steep': '50',
@@ -14,11 +14,27 @@ const DEFAULTS = {
 	'n-points': '26',
 };
 const CHECKED = new Set(['freq-point', 'vol-dist', 'env-dist']);
+const RADIOS = new Set(['freq-point', 'freq-dist', 'vol-dist', 'vol-const', 'env-dist', 'env-off']);
+const RANGES = new Set(['freq-steep', 'vol-steep', 'env-steep']);
 
 /* ---- canvas ---- */
 
 function fakeCanvasContext() {
-	return new Proxy({}, {
+	const context = {
+		recording: false,
+		operations: [],
+		path: [],
+		beginPath() {
+			if (this.recording) this.path = [];
+		},
+		arc(x, y, radius, start, end) {
+			if (this.recording) this.path.push({ x, y, radius, start, end });
+		},
+		stroke() {
+			if (this.recording) this.operations.push({ arcs: this.path, alpha: this.globalAlpha, width: this.lineWidth });
+		},
+	};
+	return new Proxy(context, {
 		get(target, prop) {
 			if (prop in target) return target[prop];
 			return () => undefined;
@@ -33,14 +49,19 @@ function fakeCanvasContext() {
 function makeElement(id) {
 	const listeners = Object.create(null);
 	const classes = new Set();
+	const type = id === 'n-points' ? 'number' : id === 'share-url' ? 'text' :
+		RADIOS.has(id) ? 'radio' : RANGES.has(id) ? 'range' : '';
 	const element = {
 		id,
-		tagName: id === 'n-points' ? 'INPUT' : 'DIV',
-		type: id === 'n-points' ? 'number' : '',
+		tagName: type ? 'INPUT' : id === 'copy-url' ? 'BUTTON' : 'DIV',
+		type,
 		style: {},
 		textContent: '',
 		value: DEFAULTS[id] || '',
 		checked: CHECKED.has(id),
+		hidden: id === 'share-fallback',
+		focused: false,
+		selected: false,
 		width: 0,
 		height: 0,
 		classList: {
@@ -54,20 +75,25 @@ function makeElement(id) {
 			(listeners[type] = listeners[type] || []).push(fn);
 		},
 		setPointerCapture() {},
-		blur() {},
+		blur() { element.focused = false; },
+		focus() { element.focused = true; },
+		select() { element.selected = true; },
 		getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }),
 		getContext: () => element.ctx || (element.ctx = fakeCanvasContext()),
 		dispatch(type, event) {
 			const list = listeners[type] || [];
 			const payload = Object.assign({
-				preventDefault() {},
+				defaultPrevented: false,
+				preventDefault() { this.defaultPrevented = true; },
 				target: element,
 				pointerId: 1,
 				button: 0,
 				clientX: 0,
 				clientY: 0,
 			}, event);
-			for (const fn of list) fn(payload);
+			const results = [];
+			for (const fn of list) results.push(fn(payload));
+			return { event: payload, results };
 		},
 	};
 	return element;
@@ -96,7 +122,9 @@ function fakeParam(value) {
 
 function fakeNode(extra) {
 	return Object.assign({
+		connections: [],
 		connect(destination) {
+			this.connections.push(destination);
 			return destination;
 		},
 		disconnect() {},
@@ -120,6 +148,20 @@ class FakeAudioContext {
 		const osc = fakeNode({ type: 'sine', frequency: fakeParam(220), detune: fakeParam(0), start() {}, stop() {} });
 		this.record.oscillators.push(osc);
 		return osc;
+	}
+	createConstantSource() {
+		const source = fakeNode({ offset: fakeParam(1), start() {}, stop() {} });
+		this.record.sources.push(source);
+		return source;
+	}
+	createAnalyser() {
+		const analyser = fakeNode({
+			fftSize: 2048,
+			sample: 0,
+			getFloatTimeDomainData(data) { data.fill(this.sample); },
+		});
+		this.record.analysers.push(analyser);
+		return analyser;
 	}
 	createBiquadFilter() {
 		const filter = fakeNode({ type: 'lowpass', frequency: fakeParam(1000), Q: fakeParam(1), gain: fakeParam(0) });
@@ -150,16 +192,23 @@ class FakeAudioContext {
 
 /* ---- page ---- */
 
-function createPage() {
-	const audio = { contexts: 0, oscillators: [], gains: [], panners: [], filters: [] };
+function createPage(options = {}) {
+	const audio = { contexts: 0, oscillators: [], gains: [], panners: [], filters: [], analysers: [], sources: [] };
+	const clipboard = { text: '', writes: 0 };
 	const elements = new Map();
 	const frames = [];
 	const windowListeners = Object.create(null);
 
 	const sandbox = {
 		console,
-		innerWidth: 1280,
-		innerHeight: 720,
+		URL,
+		URLSearchParams,
+		btoa,
+		atob,
+		location: { href: options.url || 'https://example.test/index.html' },
+		navigator: {},
+		innerWidth: options.width || 1280,
+		innerHeight: options.height || 720,
 		devicePixelRatio: 2,
 		requestAnimationFrame(fn) {
 			frames.push(fn);
@@ -177,6 +226,16 @@ function createPage() {
 			addEventListener() {},
 		},
 	};
+	if (options.clipboard !== 'unavailable') {
+		sandbox.navigator.clipboard = {
+			writeText(text) {
+				clipboard.writes++;
+				if (options.clipboard === 'reject') return Promise.reject(new Error('denied'));
+				clipboard.text = text;
+				return Promise.resolve();
+			},
+		};
+	}
 	sandbox.globalThis = sandbox;
 	sandbox.AudioContext = function AudioContext() {
 		return new FakeAudioContext(audio);
@@ -193,6 +252,7 @@ function createPage() {
 		sandbox,
 		elements,
 		audio,
+		clipboard,
 		frames,
 		context,
 		voiceCount,
@@ -213,10 +273,9 @@ function createPage() {
 			const list = windowListeners[type] || [];
 			for (const fn of list) fn(Object.assign({ preventDefault() {} }, event));
 		},
-		// Node layout of src/sound.js: master gain, then per voice envGain, level, mod;
-		// per voice carrier then LFO, one filter, and one panner.
+		// Master, then per voice: envGain, level, mod, meterEnv, meterLevel.
 		voice(i) {
-			const gainBase = 1 + i * 3;
+			const gainBase = 1 + i * 5;
 			return {
 				carrier: audio.oscillators[i * 2],
 				lfo: audio.oscillators[i * 2 + 1],
@@ -224,6 +283,10 @@ function createPage() {
 				envGain: audio.gains[gainBase],
 				level: audio.gains[gainBase + 1],
 				mod: audio.gains[gainBase + 2],
+				meterEnv: audio.gains[gainBase + 3],
+				meterLevel: audio.gains[gainBase + 4],
+				envelopeMeter: audio.analysers[i * 2],
+				signalMeter: audio.analysers[i * 2 + 1],
 				pan: audio.panners[i],
 			};
 		},

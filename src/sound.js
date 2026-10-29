@@ -7,6 +7,7 @@
 	const CUTOFF_MIN = 90;
 	const CUTOFF_MAX = 18000;
 	const CUTOFF_MULT = 4.5;
+	const METER_SIZE = 32;
 
 	function setImmediate(param, value, now) {
 		param.cancelScheduledValues(now);
@@ -53,15 +54,17 @@
 		master.connect(limiter);
 		master.gain.setTargetAtTime(this.muted ? 0 : MASTER_LEVEL, ctx.currentTime, 0.15);
 
+		const meterSource = ctx.createConstantSource();
+		meterSource.start();
 		this.ctx = ctx;
 		this.master = master;
 		this.voices = [];
-		for (let i = 0; i < MAX_VOICES; i++) this.voices.push(this.createVoice(ctx, master, i));
+		for (let i = 0; i < MAX_VOICES; i++) this.voices.push(this.createVoice(ctx, master, meterSource));
 		this.available = true;
 		return true;
 	};
 
-	Sound.prototype.createVoice = function (ctx, out, index) {
+	Sound.prototype.createVoice = function (ctx, out, meterSource) {
 		const osc = ctx.createOscillator();
 		osc.type = 'triangle';
 		osc.frequency.value = 220;
@@ -87,11 +90,27 @@
 		const mod = ctx.createGain();
 		mod.gain.value = 0;
 
+		// A DC copy of the envelope makes the actual audio-rate modulation and level
+		// observable without sampling the carrier or guessing the LFO's phase.
+		const meterEnv = ctx.createGain();
+		meterEnv.gain.value = 1;
+		const meterLevel = ctx.createGain();
+		meterLevel.gain.value = 0;
+		const envelopeMeter = ctx.createAnalyser();
+		const signalMeter = ctx.createAnalyser();
+		envelopeMeter.fftSize = signalMeter.fftSize = METER_SIZE;
+		const envelopeData = new Float32Array(METER_SIZE);
+		const signalData = new Float32Array(METER_SIZE);
+
 		osc.connect(filter).connect(envGain).connect(level).connect(pan).connect(out);
 		lfo.connect(mod).connect(envGain.gain);
+		mod.connect(meterEnv.gain);
+		meterSource.connect(meterEnv);
+		meterEnv.connect(envelopeMeter);
+		meterEnv.connect(meterLevel).connect(signalMeter);
 		osc.start();
 		lfo.start();
-		return { osc, filter, envGain, level, pan, lfo, mod, index };
+		return { osc, filter, envGain, level, pan, lfo, mod, meterEnv, meterLevel, envelopeMeter, signalMeter, envelopeData, signalData };
 	};
 
 	Sound.prototype.findSlotForCell = function (cellId) {
@@ -133,21 +152,37 @@
 			setImmediate(voice.pan.pan, panVal, now);
 			setImmediate(voice.lfo.frequency, rate, now);
 			setImmediate(voice.envGain.gain, envBase, now);
+			setImmediate(voice.meterEnv.gain, envBase, now);
 			setImmediate(voice.mod.gain, modAmp, now);
-			if (this.slotGain[slot] < 1e-3) setImmediate(voice.level.gain, 0, now);
+			if (this.slotGain[slot] < 1e-3) {
+				setImmediate(voice.level.gain, 0, now);
+				setImmediate(voice.meterLevel.gain, 0, now);
+			}
 		} else {
 			voice.osc.frequency.setTargetAtTime(freq, now, 0.035);
 			voice.filter.frequency.setTargetAtTime(cutoff, now, 0.06);
 			voice.pan.pan.setTargetAtTime(panVal, now, 0.045);
 			voice.lfo.frequency.setTargetAtTime(rate, now, 0.055);
 			voice.envGain.gain.setTargetAtTime(envBase, now, 0.045);
+			voice.meterEnv.gain.setTargetAtTime(envBase, now, 0.045);
 			voice.mod.gain.setTargetAtTime(modAmp, now, 0.045);
 		}
 		voice.level.gain.setTargetAtTime(amp, now, 0.04);
+		voice.meterLevel.gain.setTargetAtTime(amp, now, 0.04);
 		this.slotGain[slot] = this.slotGain[slot] * 0.65 + amp * 0.35;
+
+		if (snap) {
+			frame.envelope[k] = envBase;
+			frame.signal[k] = 0;
+			return;
+		}
+		voice.envelopeMeter.getFloatTimeDomainData(voice.envelopeData);
+		voice.signalMeter.getFloatTimeDomainData(voice.signalData);
+		frame.envelope[k] = Math.max(0, Math.min(1, voice.envelopeData[METER_SIZE - 1]));
+		frame.signal[k] = Math.max(0, voice.signalData[METER_SIZE - 1]);
 	};
 
-	// frame: { count, cell[], freq[], amp[], pan[], rate[], depth[] }
+	// frame: { count, cell[], freq[], amp[], pan[], rate[], depth[], envelope[], signal[] }
 	Sound.prototype.apply = function (frame) {
 		const ctx = this.ctx;
 		if (!ctx) return;
@@ -175,6 +210,7 @@
 		for (let s = 0; s < MAX_VOICES; s++) {
 			if (this.slotActive[s]) continue;
 			this.voices[s].level.gain.setTargetAtTime(0, now, 0.04);
+			this.voices[s].meterLevel.gain.setTargetAtTime(0, now, 0.04);
 			this.slotGain[s] *= 0.72;
 			if (this.slotGain[s] < 1e-4) {
 				this.slotGain[s] = 0;

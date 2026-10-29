@@ -25,6 +25,21 @@ Notes for agents working on this repo.
   every sample during transitions (entering `<20 px` continuous core or toggling
   the envelope radio button) — zero gain overshoot and zero WaveShaper overhead.
 
+## visualizing the actual Web Audio envelope
+
+- A frame-clock sine drifts from an LFO when its rate is smoothed or the audio
+  context is suspended. `AudioParam.value` also does not reliably expose its
+  automated or connected audio-rate value; Chromium can keep reporting the
+  intrinsic value after `setTargetAtTime`.
+- Feed a shared constant source through parallel envelope and level gains, mirror
+  their automation, and connect the *same* LFO modulation to both envelope gains.
+  Two unconnected-output `AnalyserNode`s report the actual envelope and pre-pan,
+  pre-master level. Read the newest sample from reused 32-sample buffers, and
+  associate it with the pinned voice slot. The meter branch is not connected to
+  the speakers.
+- On slot reassignment, discard the previous analyser window for the first frame.
+  Screen-rate sampling inevitably aliases very fast audio-rate modulation.
+
 ## tuning over actual Voronoi adjacency vs sequential insertion
 
 - Scoring candidate pentatonic tones only at insertion time against Euclidean

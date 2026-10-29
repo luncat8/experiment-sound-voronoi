@@ -3,7 +3,8 @@
 	"private": true,
 	"description": "Voronoi gravity field you can hear: nearest cell and its adjacent cells drive a spatial Web Audio synth.",
 	"scripts": {
-		"test": "node experiments/check-voronoi.js && node experiments/check-physics.js && node experiments/check-tones.js && node experiments/smoke.js",
+		"test": "node experiments/check-voronoi.js && node experiments/check-physics.js && node experiments/check-tones.js && node experiments/smoke.js && node experiments/check-features.js",
+		"check:features": "node experiments/check-features.js",
 		"check:voronoi": "node experiments/check-voronoi.js",
 		"check:physics": "node experiments/check-physics.js",
 		"check:tones": "node experiments/check-tones.js",

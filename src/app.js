@@ -1,7 +1,7 @@
 (function (root) {
 	'use strict';
 
-	const { Voronoi, Physics, Sound, Tones } = root.GS;
+	const { Voronoi, Physics, Sound, Tones, Settings } = root.GS;
 	const $ = id => document.getElementById(id);
 
 	const MAX_POINTS = Voronoi.MAX_POINTS;
@@ -16,6 +16,13 @@
 	const PAN_REACH = 20;
 	const MAX_VOICE_AMP = 0.46;
 	const CONST_TOTAL_AMP = 0.42;
+	const MIN_SITE_RADIUS = 5;
+	const MAX_SITE_RADIUS = 30;
+	const MIN_MASS = 0.15 + 0.9 * (MIN_SITE_RADIUS / 12) ** 2;
+	const MAX_MASS = 0.15 + 0.9 * (MAX_SITE_RADIUS / 12) ** 2;
+	const WHEEL_RATE = 0.0015;
+	const AIM_DASH = [4, 7];
+	const NO_DASH = [];
 
 	const voronoi = new Voronoi();
 	const physics = new Physics();
@@ -46,6 +53,7 @@
 		running: true,
 		muted: false,
 		aiming: false,
+		hover: -1,
 		sounding: new Int32Array(MAX_ACTIVE),
 		soundingCount: 0,
 		lastTime: 0,
@@ -62,6 +70,8 @@
 		pan: new Float64Array(MAX_ACTIVE),
 		rate: new Float64Array(MAX_ACTIVE),
 		depth: new Float64Array(MAX_ACTIVE),
+		envelope: new Float64Array(MAX_ACTIVE),
+		signal: new Float64Array(MAX_ACTIVE),
 	};
 
 	const fillColor = new Array(MAX_POINTS);
@@ -84,6 +94,12 @@
 		if (value < min) return min;
 		if (value > max) return max;
 		return value;
+	}
+
+	function setSiteMass(index, mass) {
+		const value = clamp(mass, MIN_MASS, MAX_MASS);
+		sites.mass[index] = value;
+		sites.radius[index] = 12 * Math.sqrt((value - 0.15) / 0.9);
 	}
 
 	function paintSite(i) {
@@ -135,8 +151,7 @@
 		const mass = radius / 12;
 		sites.x[i] = x;
 		sites.y[i] = y;
-		sites.radius[i] = radius;
-		sites.mass[i] = mass * mass * 0.9 + 0.15;
+		setSiteMass(i, mass * mass * 0.9 + 0.15);
 		sites.semitone[i] = Tones.pick(x, y, sites.x, sites.y, sites.semitone, sites.count, i);
 		paintSite(i);
 		return i;
@@ -152,6 +167,7 @@
 	}
 
 	function removePoint(index) {
+		setHover(-1);
 		clearSounding();
 		sound.releaseAll();
 		const last = --sites.count;
@@ -196,7 +212,16 @@
 		return best;
 	}
 
+	function setHover(index, refresh) {
+		if (state.hover === index && !refresh) return;
+		state.hover = index;
+		canvas.style.cursor = index < 0 ? 'crosshair' : drag.active && drag.kind === 1 ? 'grabbing' : 'grab';
+		ui.mass.textContent = index < 0 ? 'hover a point · scroll to adjust mass' :
+			'mass ' + sites.mass[index].toFixed(2) + ' · scroll ↑ / ↓ to adjust';
+	}
+
 	function clearPoints() {
+		setHover(-1);
 		clearSounding();
 		sound.releaseAll();
 		sites.count = 0;
@@ -210,6 +235,7 @@
 	}
 
 	function randomize(requestedN) {
+		setHover(-1);
 		clearSounding();
 		sound.releaseAll();
 		sites.count = 0;
@@ -329,6 +355,31 @@
 		}
 	}
 
+	function drawHalos() {
+		if (!sound.available) return;
+		ctx.lineCap = 'round';
+		for (let k = 0; k < frame.count; k++) {
+			const i = frame.cell[k];
+			const x = sites.x[i];
+			const y = sites.y[i];
+			const radius = sites.radius[i];
+			const level = Math.sqrt(clamp(frame.signal[k] / MAX_VOICE_AMP, 0, 1));
+			ctx.strokeStyle = dotColor[i];
+			ctx.globalAlpha = 0.1 + 0.7 * level;
+			ctx.lineWidth = 1 + 1.5 * level;
+			ctx.beginPath();
+			ctx.arc(x, y, radius + 7 + 12 * frame.envelope[k], 0, TAU);
+			ctx.stroke();
+			if (level < 0.005) continue;
+			ctx.globalAlpha = 0.25 + 0.7 * level;
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.arc(x, y, radius + 4, -Math.PI / 2, -Math.PI / 2 + TAU * level);
+			ctx.stroke();
+		}
+		ctx.globalAlpha = 1;
+	}
+
 	function drawSites() {
 		const showCore = state.envMode === 1;
 		for (let i = 0; i < sites.count; i++) {
@@ -350,6 +401,12 @@
 			ctx.arc(x, y, radius * 0.42, 0, TAU);
 			ctx.fillStyle = dotColor[i];
 			ctx.fill();
+			if (i !== state.hover) continue;
+			ctx.beginPath();
+			ctx.arc(x, y, radius + 4, 0, TAU);
+			ctx.strokeStyle = dotColor[i];
+			ctx.lineWidth = 1.2;
+			ctx.stroke();
 		}
 	}
 
@@ -367,13 +424,13 @@
 			ctx.stroke();
 		}
 		if (state.aiming) {
-			ctx.setLineDash([4, 7]);
+			ctx.setLineDash(AIM_DASH);
 			ctx.strokeStyle = 'rgba(150, 236, 255, 0.4)';
 			ctx.beginPath();
 			ctx.moveTo(drag.x0, drag.y0);
 			ctx.lineTo(drag.x0 + (drag.x - drag.x0) * 0.5, drag.y0 + (drag.y - drag.y0) * 0.5);
 			ctx.stroke();
-			ctx.setLineDash([]);
+			ctx.setLineDash(NO_DASH);
 		}
 		ctx.beginPath();
 		ctx.arc(physics.x, physics.y, 3.4, 0, TAU);
@@ -393,6 +450,7 @@
 		ctx.fillStyle = '#07070d';
 		ctx.fillRect(0, 0, w, h);
 		drawCells();
+		drawHalos();
 		drawSites();
 		drawProbe();
 	}
@@ -471,6 +529,95 @@
 		updateStatus();
 	}
 
+	/* ---- shareable scene ---- */
+
+	function rounded(value, scale) {
+		return Math.round(value * scale) / scale;
+	}
+
+	function snapshot() {
+		const points = [];
+		for (let i = 0; i < sites.count; i++) {
+			points.push([rounded(sites.x[i], 100), rounded(sites.y[i], 100), rounded(sites.mass[i], 10000), sites.semitone[i]]);
+		}
+		return {
+			v: Settings.VERSION,
+			size: [state.viewW, state.viewH],
+			modes: [state.freqMode, state.volMode, state.envMode],
+			steep: [Math.round(state.freqSteep * 100), Math.round(state.volSteep * 100), Math.round(state.envSteep * 100)],
+			n: clamp(parseInt(ui.nPoints.value, 10) || defaultPointCount(), 1, MAX_POINTS),
+			flags: [state.running ? 1 : 0, state.muted ? 1 : 0],
+			probe: [rounded(physics.x, 100), rounded(physics.y, 100), rounded(physics.vx, 100), rounded(physics.vy, 100)],
+			sites: points,
+		};
+	}
+
+	function restoreScene(scene) {
+		setHover(-1, true);
+		clearSounding();
+		sound.releaseAll();
+		drag.active = false;
+		state.aiming = false;
+		const sx = state.viewW / scene.size[0];
+		const sy = state.viewH / scene.size[1];
+		sites.count = scene.sites.length;
+		for (let i = 0; i < sites.count; i++) {
+			const point = scene.sites[i];
+			sites.x[i] = point[0] * sx;
+			sites.y[i] = point[1] * sy;
+			setSiteMass(i, point[2]);
+			sites.semitone[i] = point[3];
+		}
+		rebuild();
+		paintAllSites();
+		physics.place(scene.probe[0] * sx, scene.probe[1] * sy);
+		physics.launch(scene.probe[2] * sx, scene.probe[3] * sy);
+		setFreqMode(scene.modes[0]);
+		setVolMode(scene.modes[1]);
+		setEnvMode(scene.modes[2]);
+		state.freqSteep = scene.steep[0] / 100;
+		state.volSteep = scene.steep[1] / 100;
+		state.envSteep = scene.steep[2] / 100;
+		ui.freqSteep.value = String(scene.steep[0]);
+		ui.volSteep.value = String(scene.steep[1]);
+		ui.envSteep.value = String(scene.steep[2]);
+		ui.nPoints.value = String(scene.n);
+		updateCount();
+		state.running = scene.flags[0] === 1;
+		state.muted = scene.flags[1] === 1;
+		sound.setMuted(state.muted);
+		if (state.running) sound.resume();
+		else sound.suspend();
+		updateStatus();
+	}
+
+	function loadUrl() {
+		const scene = Settings.fromUrl(root.location.href);
+		if (!scene) return false;
+		restoreScene(scene);
+		return true;
+	}
+
+	async function copyUrl() {
+		const url = Settings.toUrl(snapshot(), root.location.href);
+		ui.copyStatus.textContent = '';
+		if (root.navigator && root.navigator.clipboard && root.navigator.clipboard.writeText) {
+			try {
+				await root.navigator.clipboard.writeText(url);
+				ui.shareFallback.hidden = true;
+				ui.copyStatus.textContent = 'link copied';
+				return;
+			} catch (error) {
+				// A selectable link also works when clipboard permission is denied.
+			}
+		}
+		ui.shareFallback.hidden = false;
+		ui.shareUrl.value = url;
+		ui.shareUrl.focus();
+		ui.shareUrl.select();
+		ui.copyStatus.textContent = 'select and copy the link below';
+	}
+
 	/* ---- input ---- */
 
 	function onPointerDown(event) {
@@ -493,11 +640,16 @@
 		drag.y = cy;
 		drag.index = hitSite(cx, cy);
 		drag.kind = drag.index >= 0 ? 1 : 0;
+		setHover(drag.index, true);
 		canvas.setPointerCapture(event.pointerId);
 	}
 
 	function onPointerMove(event) {
-		if (!drag.active) return;
+		if (!drag.active) {
+			const rect = canvas.getBoundingClientRect();
+			setHover(hitSite(event.clientX - rect.left, event.clientY - rect.top));
+			return;
+		}
 		drag.x = event.clientX - drag.ox;
 		drag.y = event.clientY - drag.oy;
 		if (drag.kind === 1) {
@@ -514,24 +666,38 @@
 		physics.place(drag.x0, drag.y0);
 	}
 
-	function onPointerUp() {
+	function onPointerUp(event) {
 		if (!drag.active) return;
 		drag.active = false;
-		if (drag.kind === 1) {
-			retune(drag.index);
-			return;
+		if (drag.kind === 1) retune(drag.index);
+		else if (!drag.moved) addPoint(drag.x0, drag.y0);
+		else {
+			state.aiming = false;
+			physics.launch((drag.x - drag.x0) * LAUNCH_GAIN, (drag.y - drag.y0) * LAUNCH_GAIN);
 		}
-		if (!drag.moved) {
-			addPoint(drag.x0, drag.y0);
-			return;
-		}
-		state.aiming = false;
-		physics.launch((drag.x - drag.x0) * LAUNCH_GAIN, (drag.y - drag.y0) * LAUNCH_GAIN);
+		const rect = canvas.getBoundingClientRect();
+		setHover(hitSite(event.clientX - rect.left, event.clientY - rect.top), true);
+	}
+
+	function onWheel(event) {
+		if (event.ctrlKey || !event.deltaY) return;
+		const rect = canvas.getBoundingClientRect();
+		const hit = hitSite(event.clientX - rect.left, event.clientY - rect.top);
+		if (hit < 0) return;
+		event.preventDefault();
+		const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? state.viewH : 1;
+		const change = clamp(-event.deltaY * unit * WHEEL_RATE, -1, 1);
+		setSiteMass(hit, sites.mass[hit] * Math.exp(change));
+		setHover(hit, true);
 	}
 
 	function onKeyDown(event) {
-		if (event.target && event.target.tagName === 'INPUT' && event.target.type === 'number') return;
+		const target = event.target;
 		const key = event.key;
+		if (event.ctrlKey || event.metaKey || event.altKey) return;
+		if (target && (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
+		if (target && target.tagName === 'INPUT' && target.type !== 'radio' && target.type !== 'range') return;
+		if (target && key === ' ' && (target.tagName === 'INPUT' || target.tagName === 'BUTTON')) return;
 		if (key === 'r' || key === 'R') {
 			startAudio();
 			randomize(parseInt(ui.nPoints.value, 10));
@@ -594,9 +760,12 @@
 		canvas.addEventListener('pointermove', onPointerMove);
 		canvas.addEventListener('pointerup', onPointerUp);
 		canvas.addEventListener('pointercancel', onPointerUp);
+		canvas.addEventListener('pointerleave', () => { if (!drag.active) setHover(-1); });
+		canvas.addEventListener('wheel', onWheel, { passive: false });
 		canvas.addEventListener('contextmenu', event => event.preventDefault());
 		root.addEventListener('keydown', onKeyDown);
 		root.addEventListener('resize', resize);
+		root.addEventListener('hashchange', loadUrl);
 
 		ui.freqPoint.addEventListener('change', () => setFreqMode(0));
 		ui.freqDist.addEventListener('change', () => setFreqMode(1));
@@ -622,6 +791,7 @@
 			ui.clear.blur();
 			clearPoints();
 		});
+		ui.copyUrl.addEventListener('click', copyUrl);
 	}
 
 	function init() {
@@ -644,8 +814,13 @@
 			count: $('count'),
 			voices: $('voices'),
 			status: $('status'),
+			mass: $('mass-readout'),
 			random: $('random'),
 			clear: $('clear'),
+			copyUrl: $('copy-url'),
+			copyStatus: $('copy-status'),
+			shareFallback: $('share-fallback'),
+			shareUrl: $('share-url'),
 			gate: $('gate'),
 		};
 		buildPalette();
@@ -659,7 +834,7 @@
 		setVolMode(0);
 		setEnvMode(1);
 		ui.nPoints.value = String(defaultPointCount());
-		randomize(parseInt(ui.nPoints.value, 10));
+		if (!loadUrl()) randomize(parseInt(ui.nPoints.value, 10));
 		updateStatus();
 		requestAnimationFrame(loop);
 	}

@@ -14,12 +14,34 @@ Open `index.html` — no build, no server, no network.
 | click empty canvas | add a point |
 | drag empty canvas | slingshot the probe |
 | drag a point | move it (field rebuilds live) |
+| scroll over a point | scroll up / down to increase / decrease its mass and gravity |
 | right-click a point | remove it |
 | N | rebuild diagram with `N` points |
 | R / C | random field / clear |
 | 1 / 2 / 3 | toggle `freq` / `volume` / `envelope` radio group |
 | M / P | mute / pause |
 | space | kick the probe in a random direction |
+| copy settings URL | copy a link to the current scene |
+
+The hovered point is outlined and its mass appears in the HUD. Point size follows
+mass; adjusting it changes gravity immediately without rebuilding the diagram.
+
+## halos and sharing
+
+After sound starts, each active site's halo follows its actual audio envelope:
+its radius expands and contracts with the unipolar sine, while its brightness and
+inner arc show the instantaneous voice level. Envelope `off` and the `<20 px`
+continuous core produce steady halos. The meters are pre-mute, so they remain
+visible while muted; pausing freezes them. Very fast modulation can alias at the
+screen's frame rate.
+
+**Copy settings URL** saves the synth modes and sliders, point positions, masses
+and tones, probe position and velocity, and pause/mute state in the URL fragment.
+Opening the link restores the scene without starting audio; click or tap to start
+it. Positions and velocity scale to the new viewport, while the audio phase and
+probe trail start fresh. If clipboard access is unavailable, the link appears in
+a selectable field for manual copying. A `file://` link works on a device with
+the same local file path; use a hosted URL to share between devices.
 
 ## synth sound (3 radio groups + steepness sliders)
 
@@ -60,12 +82,14 @@ Cell hue encodes pitch class and lightness separates octaves.
     src/voronoi.js                 allocation-free half-plane Voronoi + adjacency
     src/physics.js                 softened gravity probe, bounce, stall recovery
     src/tones.js                   pentatonic placement, Voronoi tuning, curves
-    src/sound.js                   cell-pinned 20-voice Web Audio synth
+    src/sound.js                   cell-pinned Web Audio synth + envelope meters
+    src/settings.js                validated, versioned scene URLs
     src/app.js                     field state, audio frame, rendering, controls
     experiments/                   Node test suites, flight telemetry, WAV renderer
 
 ## checks
 
-    npm test                       voronoi + physics + tones + page smoke suite
+    npm test                       geometry, physics, tones, UI and feature checks
+    npm run check:features         halo, wheel and share-link checks
     npm run measure                flight parameter stats across radio presets
     npm run render                 offline WAV render + peak/RMS/clipping check

@@ -39,6 +39,8 @@
 		border: 1px solid var(--line);
 		border-radius: 10px;
 		max-width: min(440px, calc(100vw - 24px));
+		max-height: calc(100vh - 24px);
+		overflow-y: auto;
 		backdrop-filter: blur(6px);
 	}
 	#hud .head {
@@ -140,7 +142,24 @@
 	}
 	button:hover { background: rgba(120, 200, 220, 0.22); }
 	.stat { color: var(--dim); margin-left: auto; font-size: 11px; }
-	.keys { color: var(--dim); font-size: 10px; line-height: 1.45; }
+	.mass-readout, .keys { color: var(--dim); font-size: 10px; line-height: 1.45; }
+	.share-row { flex-wrap: wrap; }
+	#copy-status { color: #8ee0f0; font-size: 10px; }
+	.share-fallback { color: var(--dim); font-size: 10px; }
+	.share-fallback[hidden] { display: none; }
+	#share-url {
+		display: block;
+		width: 100%;
+		margin-top: 4px;
+		padding: 4px 6px;
+		font: inherit;
+		color: var(--ink);
+		background: rgba(120, 200, 220, 0.08);
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		user-select: text;
+		-webkit-user-select: text;
+	}
 	#gate {
 		position: fixed;
 		left: 50%;
@@ -154,6 +173,7 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		font-size: 10px;
+		white-space: nowrap;
 		pointer-events: none;
 		transition: opacity 0.4s ease;
 	}
@@ -161,10 +181,11 @@
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="c" aria-label="Voronoi gravity field: click to add points, drag to launch, and scroll over points to adjust mass."></canvas>
 <div id="hud">
 	<div class="head"><span>sound voronoi</span><span id="status"></span></div>
 	<div id="voices" class="voices"></div>
+	<div id="mass-readout" class="mass-readout">hover a point · scroll to adjust mass</div>
 	<div class="group">
 		<div class="radios">
 			<span class="gname">freq</span>
@@ -204,8 +225,17 @@
 		<button id="clear" type="button">clear</button>
 		<span id="count" class="stat">0 points</span>
 	</div>
+	<div class="row share-row">
+		<button id="copy-url" type="button">copy settings URL</button>
+		<span id="copy-status" role="status" aria-live="polite"></span>
+	</div>
+	<div id="share-fallback" class="share-fallback" hidden>
+		<label for="share-url">Clipboard unavailable — copy this link manually</label>
+		<input id="share-url" type="text" readonly spellcheck="false">
+	</div>
 	<div class="keys">
 		click: add · drag: launch · drag point: move · right-click: remove<br>
+		scroll ↑ / ↓ over point: increase / decrease mass<br>
 		R random · C clear · 1 freq · 2 vol · 3 env · M mute · P pause · space kick
 	</div>
 </div>
@@ -214,6 +244,7 @@
 <script src="src/physics.js"></script>
 <script src="src/tones.js"></script>
 <script src="src/sound.js"></script>
+<script src="src/settings.js"></script>
 <script src="src/app.js"></script>
 </body>
 </html>

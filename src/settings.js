@@ -136,9 +136,26 @@
 		}
 	}
 
+	const PRESET_LINKS = [
+		'freq=point&freq-steep=15&vol=dist&vol-steep=39&env=dist&env-steep=77&n=36',
+		'freq=dist&freq-steep=54&vol=dist&vol-steep=53&env=dist&env-steep=6&n=36',
+	];
+	const PRESET_PARAMS = [
+		{ freq: 0, freqSteep: 15, vol: 0, volSteep: 39, env: 1, envSteep: 77, n: 36 },
+		{ freq: 1, freqSteep: 54, vol: 0, volSteep: 53, env: 1, envSteep: 6, n: 36 },
+	];
+	const PRESETS = PRESET_LINKS.slice();
+	const PRESET_ITEMS = [
+		{ label: 'link 1 (default)', link: PRESET_LINKS[0], params: PRESET_PARAMS[0] },
+		{ label: 'link 2', link: PRESET_LINKS[1], params: PRESET_PARAMS[1] },
+	];
+
 	const api = {
 		VERSION, encode, decode, toUrl, fromUrl,
 		paramsFromScene, formatParams, parseParams, toParamsUrl, paramsFromUrl,
+		PRESETS, PRESET_LINKS, PRESET_PARAMS, PRESET_ITEMS,
+		presets: PRESETS, presetLinks: PRESET_LINKS, presetParams: PRESET_PARAMS, presetItems: PRESET_ITEMS,
+		presetsLinks: PRESET_LINKS, preset_links: PRESET_LINKS,
 	};
 	root.GS = root.GS || {};
 	root.GS.Settings = api;
